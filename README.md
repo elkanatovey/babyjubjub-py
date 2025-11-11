@@ -2,6 +2,16 @@
 
 Fast Python bindings for the Baby JubJub elliptic curve, powered by Rust.
 
+## Research Prototype Warning
+
+**This library is a research prototype and should NOT be used in production systems.**
+
+- The `hash_to_point` implementation is NOT cryptographically secure
+- It uses a simple hash-to-scalar-to-point method that introduces bias
+- Proper hash-to-curve methods (RFC 9380) are not implemented
+- This library is intended for research and experimentation only
+- No security audits have been performed
+
 ## Overview
 
 This library provides Python bindings to the [babyjubjub-rs](https://github.com/arnaucube/babyjubjub-rs) Rust library, offering high-performance elliptic curve operations for the Baby JubJub curve.
@@ -109,7 +119,6 @@ P_restored = bjj.ECPoint.from_bytes(compressed)
 - **Base field**: BN254 scalar field (254-bit prime)
 - **Order**: 21888242871839275222246405745257275088614511777268538073601725287587578984328
 - **Cofactor**: 8
-- **Security level**: ~128 bits
 
 ## Use Cases
 
@@ -226,6 +235,8 @@ For issues or questions:
 
 ---
 
-**Status**: Beta
+**Status**: Research Prototype / Beta
 
 **Version**: 0.1.0
+
+**Warning**: Not for production use. See security warning at top of README.
