@@ -1,6 +1,6 @@
 [package]
 name = "babyjubjub-py"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Elkana Tovey"]
 description = "Python bindings for the Baby JubJub elliptic curve"

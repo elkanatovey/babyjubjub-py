@@ -237,6 +237,6 @@ For issues or questions:
 
 **Status**: Research Prototype / Beta
 
-**Version**: 0.1.0
+**Version**: 0.1.1
 
 **Warning**: Not for production use. See security warning at top of README.
