@@ -32,8 +32,6 @@ The library includes both compressed (32-byte) and uncompressed (64-byte) serial
 
 ## Installation
 
-### From wheel (if published)
-
 ```bash
 pip install babyjubjub-py
 ```
