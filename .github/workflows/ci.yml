@@ -31,8 +31,10 @@ jobs:
         python -m pip install --upgrade pip
         pip install maturin pytest
     
-    - name: Build
-      run: maturin develop --release
+    - name: Build and install
+      run: |
+        maturin build --release
+        pip install target/wheels/*.whl
     
     - name: Run basic tests
       run: python test_basic.py

@@ -12,6 +12,7 @@ use ff_ce::{Field, PrimeField};
 /// This class wraps Baby JubJub curve operations and provides a Python-friendly API
 /// that matches the secp256k1 ECPoint interface used in the PaXoS implementation.
 #[pyclass]
+#[allow(deprecated)]  // Allow deprecated allow_threads for GIL release
 #[derive(Clone)]
 struct ECPoint {
     point: Point,
@@ -71,6 +72,7 @@ impl ECPoint {
     }
     
     /// Add two points (releases GIL for parallelization)
+    #[allow(deprecated)]
     fn add(&self, py: Python, other: &ECPoint) -> Self {
         py.allow_threads(move || {
             let result = self.point.projective().add(&other.point.projective());
@@ -93,6 +95,7 @@ impl ECPoint {
     }
     
     /// Scalar multiplication (scalar * point) (releases GIL for parallelization)
+    #[allow(deprecated)]
     fn scalar_mult(&self, py: Python, scalar: &str) -> PyResult<Self> {
         let scalar_bigint = parse_scalar(scalar)?;
         let point = self.point.clone();
