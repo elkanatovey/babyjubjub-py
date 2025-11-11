@@ -14,6 +14,7 @@ Baby JubJub is a twisted Edwards curve embedded in the BN254 scalar field, desig
 - **Complete API**: Point addition, scalar multiplication, compression, hashing
 - **Thread-safe**: GIL is released during expensive operations for true parallelism
 - **Well-tested**: Comprehensive test suite with 26+ tests
+- **Cross-platform**: Supports Linux and macOS (Python 3.10+)
 - **Easy to use**: Simple Python API with no Rust knowledge required
 
 ## Performance
