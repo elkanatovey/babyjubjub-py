@@ -1,211 +1,272 @@
-"""Comprehensive test suite for Baby JubJub Python bindings."""
+"""Group law, operators, scalars, serialization and module metadata."""
+
+import copy
+import importlib.metadata
+import pickle
+import random
 
 import pytest
+
 import babyjubjub_py as bjj
+from babyjubjub_py import ECPoint
+
+from . import reference as ref
+
+L = ref.L
+G = ECPoint.generator()
 
 
-class TestBasicOperations:
-    """Test basic elliptic curve operations."""
-    
-    def test_generator_point(self):
-        """Test that generator point is accessible and valid."""
-        g = bjj.ECPoint.generator()
-        assert not g.is_infinity()
-        assert g.x_hex() is not None
-        assert g.y_hex() is not None
-    
-    def test_infinity_point(self):
-        """Test identity/infinity point."""
-        inf = bjj.ECPoint.infinity()
+def point(k):
+    return ECPoint.from_scalar(k)
+
+
+def coords(pt):
+    return (int(pt.x_hex(), 16), int(pt.y_hex(), 16))
+
+
+class TestGroupLaw:
+    def test_generator(self):
+        assert coords(G) == ref.B8
+        assert not G.is_infinity()
+        assert G.is_on_curve()
+        assert G.is_in_subgroup()
+
+    def test_infinity(self):
+        inf = ECPoint.infinity()
         assert inf.is_infinity()
-    
-    def test_scalar_multiplication(self):
-        """Test scalar multiplication operation."""
-        p1 = bjj.ECPoint.from_scalar("1")
-        g = bjj.ECPoint.generator()
-        assert p1 == g
-        
-        p2 = bjj.ECPoint.from_scalar("2")
-        p1_plus_g = p1.add(g)
-        assert p2 == p1_plus_g
-    
-    def test_point_addition_associativity(self):
-        """Test that point addition is associative: (P + Q) + R = P + (Q + R)."""
-        p = bjj.ECPoint.from_scalar("123")
-        q = bjj.ECPoint.from_scalar("456")
-        r = bjj.ECPoint.from_scalar("789")
-        
-        left = p.add(q).add(r)
-        right = p.add(q.add(r))
-        assert left == right
-    
-    def test_point_addition_commutativity(self):
-        """Test that point addition is commutative: P + Q = Q + P."""
-        p = bjj.ECPoint.from_scalar("123")
-        q = bjj.ECPoint.from_scalar("456")
-        
+        assert coords(inf) == (0, 1)
+        assert inf.is_in_subgroup()
+
+    def test_one_and_two(self):
+        assert point(1) == G
+        assert point(2) == G.add(G)
+
+    def test_associativity(self):
+        p, q, r = point(123), point(456), point(789)
+        assert p.add(q).add(r) == p.add(q.add(r))
+
+    def test_commutativity(self):
+        p, q = point(123), point(456)
         assert p.add(q) == q.add(p)
-    
-    def test_point_negation(self):
-        """Test that P + (-P) = O."""
-        p = bjj.ECPoint.from_scalar("123")
-        neg_p = p.neg()
-        result = p.add(neg_p)
-        assert result.is_infinity()
-    
-    def test_point_subtraction(self):
-        """Test point subtraction: P - Q = P + (-Q)."""
-        p = bjj.ECPoint.from_scalar("123")
-        q = bjj.ECPoint.from_scalar("456")
-        
-        sub_result = p.sub(q)
-        add_neg_result = p.add(q.neg())
-        assert sub_result == add_neg_result
-    
+
+    def test_negation(self):
+        p = point(123)
+        assert p.add(p.neg()).is_infinity()
+        assert p.neg().neg() == p
+        assert ECPoint.infinity().neg() == ECPoint.infinity()
+
+    def test_subtraction(self):
+        p, q = point(123), point(456)
+        assert p.sub(q) == p.add(q.neg())
+        assert p.sub(p).is_infinity()
+
     def test_identity_element(self):
-        """Test that O + P = P for any point P."""
-        p = bjj.ECPoint.from_scalar("123")
-        inf = bjj.ECPoint.infinity()
-        result = p.add(inf)
-        assert result == p
-    
-    def test_scalar_addition_distributivity(self):
-        """Test that (a + b) * G = a*G + b*G."""
-        a = 123
-        b = 456
-        
-        left = bjj.ECPoint.from_scalar(str(a + b))
-        right = bjj.ECPoint.from_scalar(str(a)).add(bjj.ECPoint.from_scalar(str(b)))
-        assert left == right
+        p = point(123)
+        assert p.add(ECPoint.infinity()) == p
+        assert ECPoint.infinity().add(p) == p
+
+    def test_distributivity(self):
+        assert point(123 + 456) == point(123).add(point(456))
+        p = point(98765)
+        assert p.scalar_mult(7).add(p.scalar_mult(11)) == p.scalar_mult(18)
+
+    def test_matches_reference_on_random_scalars(self):
+        rng = random.Random(1234)
+        for _ in range(5):
+            k = rng.randrange(L)
+            assert coords(point(k)) == ref.mul(k, ref.B8)
+
+
+class TestScalars:
+    def test_negative_one(self):
+        assert point(-1) == G.neg()
+        assert point("-1") == G.neg()
+        assert G.scalar_mult(-1) == G.neg()
+        assert G.scalar_mult("-1") == G.neg()
+
+    def test_negative_scalars(self):
+        for k in [2, 5, 123456789, L - 1, L + 3, 2**300]:
+            assert point(-k) == point(k).neg()
+            assert point(str(-k)) == point(k).neg()
+            p = point(77)
+            assert p.scalar_mult(-k) == p.scalar_mult(k).neg()
+
+    def test_subgroup_order(self):
+        assert point(L).is_infinity()
+        assert point(str(L)).is_infinity()
+        assert G.scalar_mult(L).is_infinity()
+        assert point(L + 5) == point(5)
+        assert point(-L).is_infinity()
+
+    def test_zero(self):
+        assert point(0).is_infinity()
+        assert point("0").is_infinity()
+        assert G.scalar_mult(0).is_infinity()
+
+    def test_large_scalar(self):
+        k = 2**256 - 1
+        assert point(k) == point(k % L)
+        assert not point(k).is_infinity()
+
+    def test_int_and_str_agree(self):
+        for k in [1, 42, 2**200 + 17, L - 1]:
+            assert point(k) == point(str(k)) == point(hex(k))
+            assert G.scalar_mult(k) == G.scalar_mult(str(k))
+
+    def test_hex_strings(self):
+        assert point("0x10") == point(16)
+        assert point("0X10") == point(16)
+        assert point("-0x10") == point(-16)
+        assert point("+16") == point(16)
+
+    def test_invalid_scalars(self):
+        for bad in ["", "abc", "0x", "1.5", "0xzz", "--1", " 1"]:
+            with pytest.raises(ValueError):
+                point(bad)
+        for bad in [1.5, None, b"1", [1]]:
+            with pytest.raises(TypeError):
+                point(bad)
+            with pytest.raises(TypeError):
+                G.scalar_mult(bad)
+
+
+class TestOperators:
+    def test_add_sub_neg(self):
+        p, q = point(123), point(456)
+        assert p + q == p.add(q)
+        assert p - q == p.sub(q)
+        assert -p == p.neg()
+
+    def test_mul(self):
+        p = point(123)
+        assert 5 * p == p.scalar_mult(5)
+        assert p * 5 == p.scalar_mult(5)
+        assert -3 * p == p.scalar_mult(3).neg()
+        assert L * p == ECPoint.infinity()
+        assert 3 * G == G + G + G
+
+    def test_unsupported_operands(self):
+        with pytest.raises(TypeError):
+            G + 1
+        with pytest.raises(TypeError):
+            G - 1
+        with pytest.raises(TypeError):
+            G * 1.5
+        with pytest.raises(TypeError):
+            G * G
+        with pytest.raises(TypeError):
+            G * "5"
+
+    def test_equality_with_other_types(self):
+        assert G.__eq__(5) is NotImplemented
+        assert not (G == 5)
+        assert G != 5
+        assert G != "G"
+        assert G != None  # noqa: E711
+
+    def test_equality(self):
+        assert point(123) == point(123)
+        assert point(123) != point(456)
+        assert not (point(123) != point(123))
+
+    def test_hash(self):
+        assert hash(point(123)) == hash(point(123))
+        assert hash(ECPoint.infinity()) == hash(point(0))
+        points = {point(1), G, point(2), G + G, -G}
+        assert len(points) == 3
+        lookup = {G: "g"}
+        assert lookup[point(1)] == "g"
 
 
 class TestSerialization:
-    """Test point serialization and deserialization."""
-    
-    def test_compression_roundtrip(self):
-        """Test that compression and decompression are inverse operations."""
-        p = bjj.ECPoint.from_scalar("123456789")
-        compressed = p.to_bytes()
-        restored = bjj.ECPoint.from_bytes(compressed)
-        assert p == restored
-    
-    def test_compression_length(self):
-        """Test that compressed format is 32 bytes."""
-        p = bjj.ECPoint.from_scalar("123")
-        compressed = p.to_bytes()
-        assert len(compressed) == 32
-    
+    def test_compressed_roundtrip(self):
+        p = point(123456789)
+        data = p.to_bytes()
+        assert isinstance(data, bytes)
+        assert len(data) == 32
+        assert ECPoint.from_bytes(data) == p
+
+    def test_compressed_matches_reference(self):
+        rng = random.Random(99)
+        for _ in range(5):
+            k = rng.randrange(L)
+            assert point(k).to_bytes() == ref.compress(ref.mul(k, ref.B8))
+            assert point(-k).to_bytes() == ref.compress(ref.neg(ref.mul(k, ref.B8)))
+
+    def test_compressed_accepts_bytes_like(self):
+        data = G.to_bytes()
+        assert ECPoint.from_bytes(bytearray(data)) == G
+        assert ECPoint.from_bytes(list(data)) == G
+
+    def test_identity_compressed_roundtrip(self):
+        inf = ECPoint.infinity()
+        data = inf.to_bytes()
+        assert data == b"\x01" + bytes(31)
+        assert ECPoint.from_bytes(data).is_infinity()
+
     def test_uncompressed_roundtrip(self):
-        """Test uncompressed serialization roundtrip."""
-        p = bjj.ECPoint.from_scalar("987654321")
-        uncompressed = p.to_bytes_uncompressed()
-        restored = bjj.ECPoint.from_bytes_uncompressed(uncompressed)
-        assert p == restored
-    
-    def test_uncompressed_length(self):
-        """Test that uncompressed format is 64 bytes."""
-        p = bjj.ECPoint.from_scalar("123")
-        uncompressed = p.to_bytes_uncompressed()
-        assert len(uncompressed) == 64
-    
-    def test_infinity_serialization(self):
-        """Test that infinity point can be serialized and deserialized."""
-        inf = bjj.ECPoint.infinity()
-        # Note: Compressed serialization of infinity may not roundtrip correctly
-        # This is a known limitation of the compressed format
-        # Test uncompressed instead
-        uncompressed = inf.to_bytes_uncompressed()
-        restored = bjj.ECPoint.from_bytes_uncompressed(uncompressed)
-        assert restored.is_infinity()
+        p = point(987654321)
+        data = p.to_bytes_uncompressed()
+        assert isinstance(data, bytes)
+        assert len(data) == 64
+        x, y = coords(p)
+        assert data == x.to_bytes(32, "little") + y.to_bytes(32, "little")
+        assert ECPoint.from_bytes_uncompressed(data) == p
+        assert ECPoint.from_bytes_uncompressed_unchecked(data) == p
 
+    def test_identity_uncompressed_roundtrip(self):
+        data = ECPoint.infinity().to_bytes_uncompressed()
+        assert ECPoint.from_bytes_uncompressed(data).is_infinity()
+        assert ECPoint.from_bytes_uncompressed_unchecked(data).is_infinity()
 
-class TestHashToPoint:
-    """Test deterministic hashing to curve points."""
-    
-    def test_deterministic_hashing(self):
-        """Test that hashing is deterministic."""
-        data = b"test data"
-        h1 = bjj.ECPoint.hash_to_point(data)
-        h2 = bjj.ECPoint.hash_to_point(data)
-        assert h1 == h2
-    
-    def test_different_inputs_different_outputs(self):
-        """Test that different inputs produce different points."""
-        h1 = bjj.ECPoint.hash_to_point(b"input 1")
-        h2 = bjj.ECPoint.hash_to_point(b"input 2")
-        assert h1 != h2
-    
-    def test_hash_not_infinity(self):
-        """Test that hash_to_point doesn't produce infinity."""
-        h = bjj.ECPoint.hash_to_point(b"any data")
-        assert not h.is_infinity()
-    
-    def test_empty_input(self):
-        """Test hashing empty input."""
-        h = bjj.ECPoint.hash_to_point(b"")
-        assert not h.is_infinity()
+    def test_wrong_lengths(self):
+        with pytest.raises(ValueError):
+            ECPoint.from_bytes(bytes(31))
+        with pytest.raises(ValueError):
+            ECPoint.from_bytes_uncompressed(bytes(63))
+        with pytest.raises(ValueError):
+            ECPoint.from_bytes_uncompressed_unchecked(bytes(65))
 
+    def test_hex_coordinates_roundtrip(self):
+        p = point(31337)
+        assert p.x_hex().startswith("0x") and len(p.x_hex()) == 66
+        assert ECPoint(p.x_hex(), p.y_hex()) == p
+        assert ECPoint(p.x_hex()[2:], p.y_hex()[2:]) == p
+        assert repr(p) == f"ECPoint(x={p.x_hex()}, y={p.y_hex()})"
 
-class TestEdgeCases:
-    """Test edge cases and boundary conditions."""
-    
-    def test_zero_scalar(self):
-        """Test scalar multiplication by zero gives infinity."""
-        p = bjj.ECPoint.from_scalar("0")
-        assert p.is_infinity()
-    
-    def test_large_scalar(self):
-        """Test scalar multiplication with large scalar."""
-        large_scalar = str(2**256 - 1)
-        p = bjj.ECPoint.from_scalar(large_scalar)
-        assert not p.is_infinity()
-    
-    def test_negative_scalar_string(self):
-        """Test that negative scalar strings are handled."""
-        # Note: This may wrap around modulo the curve order
-        p = bjj.ECPoint.from_scalar("-1")
-        assert not p.is_infinity()
-    
-    def test_point_equality(self):
-        """Test point equality comparison."""
-        p1 = bjj.ECPoint.from_scalar("123")
-        p2 = bjj.ECPoint.from_scalar("123")
-        p3 = bjj.ECPoint.from_scalar("456")
-        
-        assert p1 == p2
-        assert p1 != p3
-    
-    def test_multiple_negations(self):
-        """Test that -(-P) = P."""
-        p = bjj.ECPoint.from_scalar("123")
-        neg_neg_p = p.neg().neg()
-        assert p == neg_neg_p
+    @pytest.mark.parametrize("protocol", range(pickle.HIGHEST_PROTOCOL + 1))
+    def test_pickle(self, protocol):
+        for p in [G, point(-5), ECPoint.infinity(), ECPoint.hash_to_point(b"x")]:
+            restored = pickle.loads(pickle.dumps(p, protocol=protocol))
+            assert isinstance(restored, ECPoint)
+            assert restored == p
+
+    def test_pickle_list(self):
+        points = [point(k) for k in range(10)]
+        assert pickle.loads(pickle.dumps(points)) == points
+
+    def test_copy(self):
+        p = point(42)
+        assert copy.copy(p) == p
+        assert copy.deepcopy(p) == p
 
 
 class TestModuleMetadata:
-    """Test module-level constants and metadata."""
-    
-    def test_version_exists(self):
-        """Test that version string exists."""
-        assert hasattr(bjj, '__version__')
+    def test_version(self):
         assert isinstance(bjj.__version__, str)
-    
+        assert bjj.__version__ == importlib.metadata.version("babyjubjub-py")
+
     def test_curve_name(self):
-        """Test curve name constant."""
-        assert hasattr(bjj, 'CURVE_NAME')
         assert bjj.CURVE_NAME == "Baby JubJub"
-    
-    def test_curve_order(self):
-        """Test curve order constant."""
-        assert hasattr(bjj, 'CURVE_ORDER')
-        # CURVE_ORDER is exported as a string from Rust
-        assert isinstance(bjj.CURVE_ORDER, (int, str))
-        if isinstance(bjj.CURVE_ORDER, str):
-            assert int(bjj.CURVE_ORDER) > 0
-        else:
-            assert bjj.CURVE_ORDER > 0
 
-
-if __name__ == "__main__":
-    pytest.main([__file__, "-v"])
-
+    def test_orders(self):
+        for name in ["FIELD_MODULUS", "SUBGROUP_ORDER", "CURVE_ORDER", "COFACTOR"]:
+            assert type(getattr(bjj, name)) is int
+        assert bjj.FIELD_MODULUS == ref.P
+        assert bjj.SUBGROUP_ORDER == ref.L
+        assert bjj.COFACTOR == 8
+        assert bjj.CURVE_ORDER == 8 * ref.L
+        assert (
+            bjj.CURVE_ORDER
+            == 21888242871839275222246405745257275088614511777268538073601725287587578984328
+        )
