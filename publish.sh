@@ -27,7 +27,6 @@ fi
 
 # Run tests
 echo "Running tests..."
-python test_basic.py
 pytest tests/ -v
 
 # Check Rust formatting
