@@ -16,11 +16,10 @@ checksum = "c08606f8c3cbf4ce6ec8e28fb0014a2c086708fe954eaa885384a6165172e7e8"
 
 [[package]]
 name = "babyjubjub-py"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "babyjubjub-rs",
  "ff_ce",
- "hex",
  "num-bigint 0.4.6",
  "num-traits",
  "pyo3",
@@ -366,6 +365,8 @@ dependencies = [
  "indoc",
  "libc",
  "memoffset",
+ "num-bigint 0.4.6",
+ "num-traits",
  "once_cell",
  "portable-atomic",
  "pyo3-build-config",
