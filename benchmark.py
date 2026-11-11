@@ -1,65 +1,64 @@
 #!/usr/bin/env python3
-"""Benchmark script for Baby JubJub bindings."""
+"""Micro-benchmarks for the Baby JubJub bindings.
 
-import time
+Each line reports the best (minimum) per-call time over several repeats, which is the
+least noisy estimate on a shared machine. Results depend heavily on the CPU, power
+state and build flags; build with `maturin build --release` before measuring.
+"""
+
+import random
+import timeit
+
 import babyjubjub_py as bjj
+from babyjubjub_py import ECPoint
 
-def benchmark_operation(name, operation, iterations=1000):
-    """Benchmark a single operation."""
-    start = time.time()
-    for _ in range(iterations):
-        operation()
-    elapsed = time.time() - start
-    
-    ops_per_sec = iterations / elapsed
-    time_per_op = elapsed / iterations * 1e6  # microseconds
-    
-    print(f"{name:30} {time_per_op:8.2f} µs/op    {ops_per_sec:10,.0f} ops/sec")
+REPEATS = 5
+
+
+def bench(name, stmt, number):
+    best = min(timeit.repeat(stmt, number=number, repeat=REPEATS)) / number
+    print(f"{name:42} {best * 1e6:10.2f} µs/op")
+
 
 def main():
-    print("Baby JubJub Python Bindings - Performance Benchmarks")
-    print("=" * 70)
-    print()
-    
-    # Pre-generate test data
-    g = bjj.ECPoint.generator()
-    p1 = bjj.ECPoint.from_scalar("123456")
-    p2 = bjj.ECPoint.from_scalar("789012")
+    rng = random.Random(0)
+    # Full-width scalars: uniform in [0, l) and at least 250 bits long, which is what
+    # secret keys and blinding factors look like in practice.
+    scalars = [
+        k for k in (rng.randrange(bjj.SUBGROUP_ORDER) for _ in range(64)) if k.bit_length() >= 250
+    ]
+    k = scalars[0]
+    k_str = str(k)
+
+    p1 = ECPoint.from_scalar(scalars[1])
+    p2 = ECPoint.from_scalar(scalars[2])
     compressed = p1.to_bytes()
     uncompressed = p1.to_bytes_uncompressed()
-    test_data = b"benchmark test data"
-    
-    print(f"{'Operation':30} {'Time':>15}    {'Throughput':>15}")
-    print("-" * 70)
-    
-    # Benchmark different operations
-    benchmark_operation("Generator", lambda: bjj.ECPoint.generator(), 10000)
-    benchmark_operation("Infinity", lambda: bjj.ECPoint.infinity(), 10000)
-    benchmark_operation("From scalar (small)", lambda: bjj.ECPoint.from_scalar("123"), 1000)
-    benchmark_operation("From scalar (large)", lambda: bjj.ECPoint.from_scalar(str(2**200)), 1000)
-    benchmark_operation("Point addition", lambda: p1.add(p2), 10000)
-    benchmark_operation("Point negation", lambda: p1.neg(), 10000)
-    benchmark_operation("Point subtraction", lambda: p1.sub(p2), 10000)
-    benchmark_operation("Scalar multiplication", lambda: p1.scalar_mult("42"), 1000)
-    benchmark_operation("Compression", lambda: p1.to_bytes(), 10000)
-    benchmark_operation("Decompression", lambda: bjj.ECPoint.from_bytes(compressed), 1000)
-    benchmark_operation("Uncompressed serialize", lambda: p1.to_bytes_uncompressed(), 10000)
-    benchmark_operation("Uncompressed deserialize", lambda: bjj.ECPoint.from_bytes_uncompressed(uncompressed), 10000)
-    benchmark_operation("Hash to point", lambda: bjj.ECPoint.hash_to_point(test_data), 1000)
-    benchmark_operation("Coordinate access (x)", lambda: p1.x_hex(), 10000)
-    benchmark_operation("Coordinate access (y)", lambda: p1.y_hex(), 10000)
-    benchmark_operation("Infinity check", lambda: p1.is_infinity(), 10000)
-    benchmark_operation("Equality check", lambda: p1 == p2, 10000)
-    
-    print()
-    print("=" * 70)
-    print()
-    print("Key observations:")
-    print("- Uncompressed serialization is significantly faster than compressed")
-    print("- Point addition is very efficient (sub-microsecond)")
-    print("- Scalar multiplication is the most expensive operation")
-    print("- Decompression requires solving the curve equation (expensive)")
+    x_hex, y_hex = p1.x_hex(), p1.y_hex()
+    data = b"benchmark test data"
+
+    print(f"Baby JubJub Python bindings {bjj.__version__} - micro-benchmarks")
+    print(f"scalar bit length: {k.bit_length()}")
+    print("-" * 56)
+
+    bench("Point addition (p1 + p2)", lambda: p1 + p2, 20000)
+    bench("Point negation", lambda: -p1, 20000)
+    bench("Scalar mult, full-width int", lambda: p1.scalar_mult(k), 500)
+    bench("Scalar mult, full-width str", lambda: p1.scalar_mult(k_str), 500)
+    bench("Scalar mult, small scalar (42)", lambda: p1.scalar_mult(42), 5000)
+    bench("from_scalar, full-width", lambda: ECPoint.from_scalar(k), 500)
+    bench("Compress (to_bytes)", lambda: p1.to_bytes(), 20000)
+    bench("Decompress + subgroup check (from_bytes)", lambda: ECPoint.from_bytes(compressed), 500)
+    bench("to_bytes_uncompressed", lambda: p1.to_bytes_uncompressed(), 20000)
+    bench("from_bytes_uncompressed (validated)", lambda: ECPoint.from_bytes_uncompressed(uncompressed), 500)
+    bench("from_bytes_uncompressed_unchecked", lambda: ECPoint.from_bytes_uncompressed_unchecked(uncompressed), 20000)
+    bench("ECPoint(x_hex, y_hex) (validated)", lambda: ECPoint(x_hex, y_hex), 500)
+    bench("is_on_curve", lambda: p1.is_on_curve(), 20000)
+    bench("hash_to_point", lambda: ECPoint.hash_to_point(data), 2000)
+    bench("hash_to_scalar_times_generator (old)", lambda: ECPoint.hash_to_scalar_times_generator(data), 500)
+    bench("Equality check", lambda: p1 == p2, 20000)
+    bench("hash()", lambda: hash(p1), 20000)
+
 
 if __name__ == "__main__":
     main()
-
