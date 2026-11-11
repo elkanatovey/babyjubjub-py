@@ -4,25 +4,28 @@ build-backend = "maturin"
 
 [project]
 name = "babyjubjub-py"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Fast Python bindings for the Baby JubJub elliptic curve (Research Prototype)"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = {text = "Apache-2.0"}
 keywords = ["cryptography", "elliptic-curve", "babyjubjub", "zero-knowledge", "zk-snark"]
 authors = [
     {name = "Elkana Tovey"}
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Security :: Cryptography",

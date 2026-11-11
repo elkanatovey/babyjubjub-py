@@ -6,8 +6,8 @@ Thank you for your interest in contributing to babyjubjub-py. This document prov
 
 ### Prerequisites
 
-- Rust 1.56 or later (install via [rustup](https://rustup.rs/))
-- Python 3.8 or later
+- Rust 1.74 or later (PyO3 0.27's minimum; install via [rustup](https://rustup.rs/))
+- Python 3.10 or later
 - Git
 
 ### Setting Up Development Environment
@@ -43,14 +43,13 @@ pip install pytest
 Before submitting a pull request, ensure all tests pass:
 
 ```bash
-# Run basic tests
-python test_basic.py
-
-# Run comprehensive test suite
+# Rebuild the extension, then run the test suite
+maturin develop --release
 pytest tests/ -v
 
-# Run Rust tests
-cargo test
+# Lints enforced by CI
+cargo fmt -- --check
+cargo clippy -- -D warnings
 ```
 
 ### Adding New Features
